@@ -1,0 +1,14 @@
+model: QR2          # QR1 or QR2
+n_qubits: 10        # total qubits
+n_input: 7          # input qubits (n1); hidden = n_qubits - n_input
+memory_depth: 3     # number of lags (k)
+tau: 1.0            # Hamiltonian evolution time
+ridge_delta: 1.0e-8 # ridge regression regularisation
+train_window: 571   # initial rolling window size in months
+symbol: "^GSPC"     # Yahoo Finance ticker
+start_date: "1950-01-01"
+end_date: "2017-12-31"
+cache_data: true
+cache_dir: ".cache"
+mcs_alpha: 0.05
+random_seed: 42
