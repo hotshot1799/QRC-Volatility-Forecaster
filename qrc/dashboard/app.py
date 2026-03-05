@@ -2,10 +2,10 @@
 
 import streamlit as st
 
-from qrc.dashboard.pages.01_forecast import render_forecast_page
-from qrc.dashboard.pages.02_backtest import render_backtest_page
-from qrc.dashboard.pages.03_compare import render_compare_page
-from qrc.dashboard.pages.04_shapley import render_shapley_page
+from qrc.dashboard.pages.forecast import render_forecast_page
+from qrc.dashboard.pages.backtest import render_backtest_page
+from qrc.dashboard.pages.compare import render_compare_page
+from qrc.dashboard.pages.shapley import render_shapley_page
 from qrc.pipeline.context import PipelineContext
 from qrc.pipeline.runner import PipelineRunner, load_config
 
