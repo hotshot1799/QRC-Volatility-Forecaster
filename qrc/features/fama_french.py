@@ -2,8 +2,10 @@
 
 import pandas as pd
 import pandas_datareader.data as web
+import streamlit as st
 
 
+@st.cache_data(ttl=86400)
 def fetch_fama_french(start: str, end: str) -> pd.DataFrame:
     """Fetch monthly Fama-French factors: MKT, HML, SMB, STR.
 

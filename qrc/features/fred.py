@@ -4,9 +4,11 @@ import os
 
 import pandas as pd
 import pandas_datareader.data as web
+import streamlit as st
 from dotenv import load_dotenv
 
 
+@st.cache_data(ttl=86400)
 def fetch_fred_features(
     start: str, end: str, api_key: str | None = None
 ) -> pd.DataFrame:

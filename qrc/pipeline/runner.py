@@ -5,6 +5,7 @@ import os
 
 import numpy as np
 import pandas as pd
+import streamlit as st
 import yaml
 
 from qrc.core.ensemble import QR2Ensemble
@@ -33,37 +34,70 @@ def load_config(path: str = "config/default.yaml") -> dict:
         return yaml.safe_load(f)
 
 
+@st.cache_resource
+def _cached_hamiltonian(n_qubits: int, random_seed: int, tau: float):
+    """Build IsingHamiltonian and compute unitary, cached across reruns."""
+    ham = IsingHamiltonian(n_qubits, random_seed)
+    U = ham.get_unitary(tau)
+    return ham, U
+
+
+ALL_BENCHMARKS = ["HAR", "HARX", "AR1", "AR3", "ARMAX", "LSTM", "LSTMX", "RC", "RCX"]
+
+
 class PipelineRunner:
     """Orchestrates the full QRC volatility forecasting pipeline."""
 
-    def __init__(self, config: dict, context: PipelineContext | None = None):
+    def __init__(
+        self,
+        config: dict,
+        context: PipelineContext | None = None,
+        run_shap: bool = False,
+        run_mcs: bool = False,
+        selected_benchmarks: list[str] | None = None,
+        progress_callback=None,
+    ):
         self.config = config
         self.ctx = context or PipelineContext(config=config)
         self._cache = DataCache()
         self._preprocessor = Preprocessor()
+        self.run_shap = run_shap
+        self.run_mcs = run_mcs
+        self.selected_benchmarks = selected_benchmarks if selected_benchmarks is not None else ALL_BENCHMARKS
+        self._progress_callback = progress_callback
 
     def _transition(self, new_state: PipelineState) -> None:
         logger.info("Pipeline: %s -> %s", self.ctx.state.name, new_state.name)
         self.ctx.state = new_state
 
+    def _report_progress(self, fraction: float, label: str) -> None:
+        if self._progress_callback:
+            self._progress_callback(fraction, label)
+
     def run(self) -> PipelineContext:
         """Execute the full pipeline."""
         try:
+            self._report_progress(0.0, "Checking cache / fetching data...")
             self._transition(PipelineState.CACHE_CHECK)
             self._cache_check()
 
+            self._report_progress(0.10, "Assembling features...")
             self._transition(PipelineState.ASSEMBLE)
             self._assemble()
 
+            self._report_progress(0.15, "Preprocessing data...")
             self._transition(PipelineState.PREPROCESS)
             self._preprocess()
 
+            self._report_progress(0.20, "Selecting features...")
             self._transition(PipelineState.SELECT_FEATURES)
             self._select_features()
 
+            self._report_progress(0.30, "Building quantum reservoir...")
             self._transition(PipelineState.BUILD_RESERVOIR)
             self._build_reservoir()
 
+            self._report_progress(0.35, "Encoding & evolving...")
             self._transition(PipelineState.ENCODE_EVOLVE)
             # Encoding and evolution happen inside forecast
 
@@ -73,25 +107,39 @@ class PipelineRunner:
             self._transition(PipelineState.TRAIN_READOUT)
             # Training happens inside forecast
 
+            self._report_progress(0.40, "Running QRC forecast...")
             self._transition(PipelineState.FORECAST)
             self._forecast()
 
+            self._report_progress(0.55, "Running benchmark models...")
             self._transition(PipelineState.RUN_BENCHMARKS)
             self._run_benchmarks()
 
+            self._report_progress(0.75, "Computing metrics...")
             self._transition(PipelineState.COMPUTE_METRICS)
             self._compute_metrics()
 
-            self._transition(PipelineState.RUN_MCS)
-            self._run_mcs()
+            if self.run_mcs:
+                self._report_progress(0.80, "Running Model Confidence Set...")
+                self._transition(PipelineState.RUN_MCS)
+                self._run_mcs()
+            else:
+                self.ctx.mcs_results = None
 
+            self._report_progress(0.85, "Running Diebold-Mariano tests...")
             self._transition(PipelineState.RUN_DM)
             self._run_dm()
 
-            self._transition(PipelineState.COMPUTE_SHAPLEY)
-            self._compute_shapley()
+            if self.run_shap:
+                self._report_progress(0.90, "Computing SHAP values...")
+                self._transition(PipelineState.COMPUTE_SHAPLEY)
+                self._compute_shapley()
+            else:
+                self.ctx.shap_values = None
 
+            self._report_progress(0.95, "Rendering...")
             self._transition(PipelineState.RENDER)
+            self._report_progress(1.0, "Done!")
             self._transition(PipelineState.DONE)
 
         except Exception as e:
@@ -175,8 +223,9 @@ class PipelineRunner:
                     n_hid = 1
                     n_in = n_qubits - 1
 
-                ham = IsingHamiltonian(n_qubits, cfg.get("random_seed", 42))
-                U = ham.get_unitary(cfg.get("tau", 1.0))
+                tau = cfg.get("tau", 1.0)
+                seed = cfg.get("random_seed", 42)
+                ham, U = _cached_hamiltonian(n_qubits, seed, tau)
                 res = QuantumReservoir(n_in, n_hid, U)
 
                 train = self.ctx.scaled_df.iloc[:self.ctx.train_idx]
@@ -199,13 +248,12 @@ class PipelineRunner:
     def _build_reservoir(self) -> None:
         cfg = self.config
         n_qubits = cfg["n_qubits"]
-        n_input = min(len(self.ctx.selected_features), cfg.get("n_input", 7))
-        n_hidden = n_qubits - n_input
-
-        ham = IsingHamiltonian(n_qubits, cfg.get("random_seed", 42))
-        self.ctx.hamiltonian = ham
         tau = cfg.get("tau", 1.0)
-        self.ctx.unitary = ham.get_unitary(tau)
+        seed = cfg.get("random_seed", 42)
+
+        ham, U = _cached_hamiltonian(n_qubits, seed, tau)
+        self.ctx.hamiltonian = ham
+        self.ctx.unitary = U
 
     def _forecast(self) -> None:
         """Rolling-window QRC forecast."""
@@ -274,7 +322,7 @@ class PipelineRunner:
         self.ctx.measurement_matrix = M_train if model_type == "QR2" else M1
 
     def _run_benchmarks(self) -> None:
-        """Run all classical benchmark models."""
+        """Run selected classical benchmark models."""
         rv = self.ctx.raw_df["RV"].values
         train_end = self.ctx.train_idx
         T = len(rv)
@@ -283,21 +331,25 @@ class PipelineRunner:
         exog_cols = [c for c in self.ctx.raw_df.columns if c not in ["RV", "RVq", "RVa"]]
         exog = self.ctx.raw_df[exog_cols].values if exog_cols else None
 
-        benchmarks = {
-            "HAR": HARModel(),
-            "HARX": HARXModel(),
-            "AR1": AR1Model(),
-            "AR3": AR3Model(),
-            "ARMAX": ARMAXModel(),
-            "LSTM": LSTMModel(),
-            "LSTMX": LSTMXModel(),
-            "RC": ClassicalRCModel(),
-            "RCX": ClassicalRCXModel(),
+        all_benchmarks = {
+            "HAR": HARModel,
+            "HARX": HARXModel,
+            "AR1": AR1Model,
+            "AR3": AR3Model,
+            "ARMAX": ARMAXModel,
+            "LSTM": LSTMModel,
+            "LSTMX": LSTMXModel,
+            "RC": ClassicalRCModel,
+            "RCX": ClassicalRCXModel,
         }
 
         self.ctx.predictions = self.ctx.predictions or {}
 
-        for name, model in benchmarks.items():
+        for name in self.selected_benchmarks:
+            if name not in all_benchmarks:
+                continue
+            model_cls = all_benchmarks[name]
+            model = model_cls()
             logger.info("Running benchmark: %s", name)
             try:
                 needs_exog = name in ("HARX", "ARMAX", "LSTMX", "RCX")

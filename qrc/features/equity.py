@@ -2,9 +2,11 @@
 
 import numpy as np
 import pandas as pd
+import streamlit as st
 import yfinance as yf
 
 
+@st.cache_data(ttl=86400)
 def fetch_equity_features(
     symbol: str, start: str, end: str
 ) -> pd.DataFrame:

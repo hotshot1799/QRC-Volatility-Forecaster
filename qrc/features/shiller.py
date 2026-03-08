@@ -3,10 +3,12 @@
 import os
 
 import pandas as pd
+import streamlit as st
 
 SHILLER_URL = "https://shillerdata.com/ie_data.xls"
 
 
+@st.cache_data(ttl=86400)
 def fetch_shiller_features(
     start: str, end: str, cache_dir: str = ".cache"
 ) -> pd.DataFrame:

@@ -2,7 +2,7 @@
 
 import streamlit as st
 
-from qrc.dashboard.components import shap_bar_chart
+from qrc.dashboard.components import PLOTLY_STATIC_CONFIG, shap_bar_chart
 
 
 def render_shapley_page(context) -> None:
@@ -10,11 +10,14 @@ def render_shapley_page(context) -> None:
     st.header("Feature Importance (SHAP)")
 
     if context.shap_values is None:
-        st.warning("No SHAP results available. Run the pipeline first.")
+        st.warning(
+            "No SHAP results available. Enable 'Run SHAP analysis' in the sidebar "
+            "and run the pipeline again."
+        )
         return
 
     fig = shap_bar_chart(context.shap_values)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, config=PLOTLY_STATIC_CONFIG)
 
     # Selected features
     col1, col2 = st.columns(2)

@@ -4,7 +4,7 @@ import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
 
-from qrc.dashboard.components import model_table
+from qrc.dashboard.components import PLOTLY_STATIC_CONFIG, model_table
 
 
 def render_compare_page(context) -> None:
@@ -34,7 +34,7 @@ def render_compare_page(context) -> None:
         yaxis_title="MSE",
         template="plotly_white",
     )
-    st.plotly_chart(fig_bar, use_container_width=True)
+    st.plotly_chart(fig_bar, use_container_width=True, config=PLOTLY_STATIC_CONFIG)
 
     # DM test heatmap
     if context.dm_results is not None:
@@ -52,4 +52,4 @@ def render_compare_page(context) -> None:
             title="DM Test p-values (row = baseline, col = challenger)",
             template="plotly_white",
         )
-        st.plotly_chart(fig_dm, use_container_width=True)
+        st.plotly_chart(fig_dm, use_container_width=True, config=PLOTLY_STATIC_CONFIG)

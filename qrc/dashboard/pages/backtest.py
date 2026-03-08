@@ -4,6 +4,7 @@ import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
 
+from qrc.dashboard.components import PLOTLY_STATIC_CONFIG, _downsample
 from qrc.evaluation.metrics import mse, qlike
 
 
@@ -40,10 +41,15 @@ def render_backtest_page(context) -> None:
             if i < len(dates):
                 rolling_dates.append(dates[i])
 
+        # Downsample for chart rendering
+        r_mse_ds, idx = _downsample(np.array(rolling_mse))
+        r_dates_ds = [rolling_dates[i] for i in idx if i < len(rolling_dates)]
+        r_qlike_ds = np.array(rolling_qlike)[idx]
+
         # Rolling MSE chart
         fig_mse = go.Figure()
         fig_mse.add_trace(go.Scatter(
-            x=rolling_dates, y=rolling_mse,
+            x=r_dates_ds, y=r_mse_ds,
             mode="lines", name=f"{name} Rolling MSE",
             line=dict(color="#636EFA"),
         ))
@@ -52,12 +58,12 @@ def render_backtest_page(context) -> None:
             xaxis_title="Date", yaxis_title="MSE",
             template="plotly_white",
         )
-        st.plotly_chart(fig_mse, use_container_width=True)
+        st.plotly_chart(fig_mse, use_container_width=True, config=PLOTLY_STATIC_CONFIG)
 
         # Rolling QLIKE chart
         fig_ql = go.Figure()
         fig_ql.add_trace(go.Scatter(
-            x=rolling_dates, y=rolling_qlike,
+            x=r_dates_ds, y=r_qlike_ds,
             mode="lines", name=f"{name} Rolling QLIKE",
             line=dict(color="#EF553B"),
         ))
@@ -66,7 +72,7 @@ def render_backtest_page(context) -> None:
             xaxis_title="Date", yaxis_title="QLIKE",
             template="plotly_white",
         )
-        st.plotly_chart(fig_ql, use_container_width=True)
+        st.plotly_chart(fig_ql, use_container_width=True, config=PLOTLY_STATIC_CONFIG)
 
     # Summary table
     if context.metrics is not None:
