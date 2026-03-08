@@ -5,6 +5,17 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+PLOTLY_STATIC_CONFIG = {"staticPlot": True}
+MAX_CHART_POINTS = 500
+
+
+def _downsample(arr, max_points=MAX_CHART_POINTS):
+    """Downsample an array to at most max_points using linear index sampling."""
+    if len(arr) <= max_points:
+        return arr, np.arange(len(arr))
+    idx = np.linspace(0, len(arr) - 1, max_points, dtype=int)
+    return np.asarray(arr)[idx], idx
+
 
 def rv_line_chart(
     dates: pd.DatetimeIndex,
@@ -15,13 +26,18 @@ def rv_line_chart(
     """Line chart comparing actual vs predicted RV."""
     fig = go.Figure()
     n = min(len(dates), len(actual), len(predicted))
+    # Downsample for chart rendering only
+    _, idx = _downsample(np.arange(n))
+    d = dates[:n][idx]
+    a = actual[:n][idx]
+    p = predicted[:n][idx]
     fig.add_trace(go.Scatter(
-        x=dates[:n], y=actual[:n],
+        x=d, y=a,
         mode="lines", name="Actual RV",
         line=dict(color="#636EFA"),
     ))
     fig.add_trace(go.Scatter(
-        x=dates[:n], y=predicted[:n],
+        x=d, y=p,
         mode="lines", name=f"{model_name} Predicted",
         line=dict(color="#EF553B", dash="dash"),
     ))

@@ -3,7 +3,7 @@
 import numpy as np
 import streamlit as st
 
-from qrc.dashboard.components import metric_card, rv_line_chart
+from qrc.dashboard.components import PLOTLY_STATIC_CONFIG, metric_card, rv_line_chart
 from qrc.evaluation.metrics import mse, qlike
 
 
@@ -42,4 +42,4 @@ def render_forecast_page(context) -> None:
             preds = context.predictions[name]
             n = min(len(dates), len(y_true), len(preds))
             fig = rv_line_chart(dates[:n], y_true[:n], preds[:n], name)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, config=PLOTLY_STATIC_CONFIG)
