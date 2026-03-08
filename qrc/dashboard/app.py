@@ -6,7 +6,6 @@ from qrc.dashboard.pages.forecast import render_forecast_page
 from qrc.dashboard.pages.backtest import render_backtest_page
 from qrc.dashboard.pages.compare import render_compare_page
 from qrc.dashboard.pages.shapley import render_shapley_page
-from qrc.pipeline.context import PipelineContext
 from qrc.pipeline.runner import ALL_BENCHMARKS, PipelineRunner, load_config
 
 st.set_page_config(

@@ -2,11 +2,9 @@
 
 import pandas as pd
 import pandas_datareader.data as web
-import streamlit as st
 
 
-@st.cache_data(ttl=86400)
-def fetch_fama_french(start: str, end: str) -> pd.DataFrame:
+def _fetch_fama_french_impl(start: str, end: str) -> pd.DataFrame:
     """Fetch monthly Fama-French factors: MKT, HML, SMB, STR.
 
     Returns:
@@ -33,3 +31,14 @@ def fetch_fama_french(start: str, end: str) -> pd.DataFrame:
 
     df = df.loc[start:end]
     return df[["MKT", "HML", "SMB", "STR"]]
+
+
+def fetch_fama_french(start: str, end: str) -> pd.DataFrame:
+    """Public wrapper that uses st.cache_data when inside a Streamlit session."""
+    from streamlit.runtime.scriptrunner import get_script_run_ctx
+
+    if get_script_run_ctx() is not None:
+        import streamlit as st
+
+        return st.cache_data(ttl=86400)(_fetch_fama_french_impl)(start, end)
+    return _fetch_fama_french_impl(start, end)
