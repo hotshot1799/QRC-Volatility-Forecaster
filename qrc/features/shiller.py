@@ -3,13 +3,11 @@
 import os
 
 import pandas as pd
-import streamlit as st
 
 SHILLER_URL = "https://shillerdata.com/ie_data.xls"
 
 
-@st.cache_data(ttl=86400)
-def fetch_shiller_features(
+def _fetch_shiller_features_impl(
     start: str, end: str, cache_dir: str = ".cache"
 ) -> pd.DataFrame:
     """Fetch D/P and E/P ratios from Shiller's public dataset.
@@ -80,3 +78,18 @@ def fetch_shiller_features(
 
     df = df.loc[start:end]
     return df[["DP", "EP"]]
+
+
+def fetch_shiller_features(
+    start: str, end: str, cache_dir: str = ".cache"
+) -> pd.DataFrame:
+    """Public wrapper that uses st.cache_data when inside a Streamlit session."""
+    from streamlit.runtime.scriptrunner import get_script_run_ctx
+
+    if get_script_run_ctx() is not None:
+        import streamlit as st
+
+        return st.cache_data(ttl=86400)(_fetch_shiller_features_impl)(
+            start, end, cache_dir
+        )
+    return _fetch_shiller_features_impl(start, end, cache_dir)

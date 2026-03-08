@@ -4,12 +4,10 @@ import os
 
 import pandas as pd
 import pandas_datareader.data as web
-import streamlit as st
 from dotenv import load_dotenv
 
 
-@st.cache_data(ttl=86400)
-def fetch_fred_features(
+def _fetch_fred_features_impl(
     start: str, end: str, api_key: str | None = None
 ) -> pd.DataFrame:
     """Fetch macro features from FRED: TB, INF, IP, DEF.
@@ -54,3 +52,18 @@ def fetch_fred_features(
     df = df.resample("ME").last()
     df = df.dropna()
     return df[["TB", "INF", "IP", "DEF"]]
+
+
+def fetch_fred_features(
+    start: str, end: str, api_key: str | None = None
+) -> pd.DataFrame:
+    """Public wrapper that uses st.cache_data when inside a Streamlit session."""
+    from streamlit.runtime.scriptrunner import get_script_run_ctx
+
+    if get_script_run_ctx() is not None:
+        import streamlit as st
+
+        return st.cache_data(ttl=86400)(_fetch_fred_features_impl)(
+            start, end, api_key
+        )
+    return _fetch_fred_features_impl(start, end, api_key)

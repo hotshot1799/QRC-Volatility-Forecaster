@@ -5,7 +5,6 @@ import os
 
 import numpy as np
 import pandas as pd
-import streamlit as st
 import yaml
 
 from qrc.core.ensemble import QR2Ensemble
@@ -34,12 +33,30 @@ def load_config(path: str = "config/default.yaml") -> dict:
         return yaml.safe_load(f)
 
 
-@st.cache_resource
-def _cached_hamiltonian(n_qubits: int, random_seed: int, tau: float):
+_hamiltonian_cache: dict[tuple, tuple] = {}
+
+
+def _get_get_cached_hamiltonian(n_qubits: int, random_seed: int, tau: float):
     """Build IsingHamiltonian and compute unitary, cached across reruns."""
-    ham = IsingHamiltonian(n_qubits, random_seed)
-    U = ham.get_unitary(tau)
-    return ham, U
+    from streamlit.runtime.scriptrunner import get_script_run_ctx
+
+    if get_script_run_ctx() is not None:
+        import streamlit as st
+
+        @st.cache_resource
+        def _st_cached(n_qubits, random_seed, tau):
+            ham = IsingHamiltonian(n_qubits, random_seed)
+            U = ham.get_unitary(tau)
+            return ham, U
+
+        return _st_cached(n_qubits, random_seed, tau)
+
+    key = (n_qubits, random_seed, tau)
+    if key not in _hamiltonian_cache:
+        ham = IsingHamiltonian(n_qubits, random_seed)
+        U = ham.get_unitary(tau)
+        _hamiltonian_cache[key] = (ham, U)
+    return _hamiltonian_cache[key]
 
 
 ALL_BENCHMARKS = ["HAR", "HARX", "AR1", "AR3", "ARMAX", "LSTM", "LSTMX", "RC", "RCX"]
@@ -225,7 +242,7 @@ class PipelineRunner:
 
                 tau = cfg.get("tau", 1.0)
                 seed = cfg.get("random_seed", 42)
-                ham, U = _cached_hamiltonian(n_qubits, seed, tau)
+                ham, U = _get_cached_hamiltonian(n_qubits, seed, tau)
                 res = QuantumReservoir(n_in, n_hid, U)
 
                 train = self.ctx.scaled_df.iloc[:self.ctx.train_idx]
@@ -251,7 +268,7 @@ class PipelineRunner:
         tau = cfg.get("tau", 1.0)
         seed = cfg.get("random_seed", 42)
 
-        ham, U = _cached_hamiltonian(n_qubits, seed, tau)
+        ham, U = _get_cached_hamiltonian(n_qubits, seed, tau)
         self.ctx.hamiltonian = ham
         self.ctx.unitary = U
 

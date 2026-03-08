@@ -2,12 +2,10 @@
 
 import numpy as np
 import pandas as pd
-import streamlit as st
 import yfinance as yf
 
 
-@st.cache_data(ttl=86400)
-def fetch_equity_features(
+def _fetch_equity_features_impl(
     symbol: str, start: str, end: str
 ) -> pd.DataFrame:
     """Download daily prices and compute monthly realized volatility features.
@@ -37,3 +35,18 @@ def fetch_equity_features(
     df = df.dropna()
 
     return df[["RV", "RVq", "RVa"]]
+
+
+def fetch_equity_features(
+    symbol: str, start: str, end: str
+) -> pd.DataFrame:
+    """Public wrapper that uses st.cache_data when inside a Streamlit session."""
+    from streamlit.runtime.scriptrunner import get_script_run_ctx
+
+    if get_script_run_ctx() is not None:
+        import streamlit as st
+
+        return st.cache_data(ttl=86400)(_fetch_equity_features_impl)(
+            symbol, start, end
+        )
+    return _fetch_equity_features_impl(symbol, start, end)
